@@ -9,12 +9,6 @@ from aiohttp.client_exceptions import ClientConnectionError, ClientResponseError
 # from urllib.parse import urlencode
 from urllib3.util import parse_url
 
-try:
-    from modules.xsa_decorators.exception_handler import exc_message_formatter
-except ImportError:
-    def exc_message_formatter(funct):
-        return funct
-
 """
 From experience, I know that aiohttp library causes problems behind an http proxy to accessing an https site.
 Even maybe it get problems without proxy, but that is something that I couldn't say.
@@ -96,7 +90,6 @@ class XResponseError(Exception):
 # ------------------------------------------- MAIN FUNCTIONS -----------------------------------------------------------
 
 
-@exc_message_formatter
 def multiple_async_requests(urloptions_list, common_options, loop=None):
     """
     Give the possibility of make several requests with common options for all, or specific options for each of them
@@ -132,7 +125,6 @@ def multiple_async_requests(urloptions_list, common_options, loop=None):
     return response_list
 
 
-@exc_message_formatter
 async def execute_async(urloptions_list, common_options, loop=None):
     if 'client' not in common_options:
         common_options['client'] = create_client(loop)
@@ -144,7 +136,6 @@ async def execute_async(urloptions_list, common_options, loop=None):
     return await asyncio.gather(*tasks, loop=loop)
 
 
-@exc_message_formatter
 async def async_request(url, method='get', data=None, params=None, json=None, proxy=None, *,
                         headers=None, client=None, timeout=None, **kwargs):
     client = client or create_client()
@@ -217,7 +208,6 @@ async def add_async_callback(future_fn, future_fn_args, future_fn_kwargs, callba
 # ------------------------------------------- AUX FUNCTIONS ------------------------------------------------------------
 
 
-@exc_message_formatter
 async def aiohttp_pure_request(url, method, data=None, params=None, json=None, proxy_cfg=None, *,
                                headers=None, client=None, timeout=None, **kwargs):
     """
@@ -272,7 +262,6 @@ async def aiohttp_pure_request(url, method, data=None, params=None, json=None, p
     return AsyncResponse(type='aiohttp', http_response=response_info, text=text)
 
 
-@exc_message_formatter
 async def sync_to_async_request(url, method, data=None, params=None, json=None, proxy_cfg=None, *,
                                 headers=None, loop=None, timeout=None, **kwargs):
     if proxy_cfg is not None and isinstance(proxy_cfg, str):
@@ -287,7 +276,6 @@ async def sync_to_async_request(url, method, data=None, params=None, json=None, 
                                       timeout, kwargs)
 
 
-@exc_message_formatter
 def sync_request(url, method, data=None, params=None, json=None, proxy_cfg=None, headers=None,
                  timeout=None, kwargs=dict()):
     # kwargs is a dictionary with additional options for requests.request function, and an optional logger object
@@ -333,36 +321,3 @@ def sync_request(url, method, data=None, params=None, json=None, proxy_cfg=None,
     except requests.exceptions.RequestException as err:
         logger.warning(f"requests => RequestError => {url}: {str(err)}")
         return
-
-# if __name__ == '__main__':
-#     from bs4 import BeautifulSoup
-#
-#     urls = [('http://www.granma.cu', {}), ('https://actualidad.rt.com', {}), ('http://www.cubadebate.cu', {}),
-#             ('https://www.filehorse.com/es', {})]
-#     #     urls = [("http://10.12.174.28:5000/xsa_controller/AppRegistry", {
-#     #                 "method": "post",
-#     #                 "json": {
-#     #                     "app_name": "prueba",
-#     #                     "app_id": "prueba",
-#     #                     "serv": [
-#     #                         "all"
-#     #                     ]
-#     #                 }
-#     #             })]
-#     #     proxy = "http://oleyva:Habana2019.@10.12.171.27:3128"
-#     proxy_cfg = {
-#         "http": "http://oleyva:Habana2019.@10.12.171.27:3128",
-#         "https": "http://oleyva:Habana2019.@10.12.171.27:3128"
-#     }
-#     #
-#     response = multiple_async_requests(urls, {"proxy": proxy_cfg, 'method': 'get', 'timeout': '10'})
-#     # response = multiple_async_requests(urls, {'method': 'head', 'timeout': '10'})
-#     r2 = []
-#     for r in response:
-#         if r is None: continue
-#         soup = BeautifulSoup(r.text, 'lxml')
-#         title = soup.find('title')
-#         r2.append(str(title.string))
-#     #     for r in response:
-#     #         r2.append(str(r.get('content-type'.title())))
-#     print("\n".join(r2))
