@@ -11,9 +11,10 @@ from urllib3.util import parse_url
 
 """
 From experience, I know that aiohttp library causes problems behind an http proxy to accessing an https site.
-Even maybe it get problems without proxy, but that is something that I couldn't say.
+It might even gets problems without proxy, but that is something that I couldn't say.
 I use aiohttp for performance reasons, but always checking for common failures and applying the requests library api
 for every async request if aiohttp does not make the job.
+
 """
 
 # ------------------------------------------- DEFAULTS AND AUXILIAR VARIABLES ------------------------------------------
@@ -99,7 +100,7 @@ def multiple_async_requests(urloptions_list, common_options, loop=None):
         "data": b"Hola Mundo!!!",  # Only used with non-get requests
         "params": {"q": "frase a buscar"},  # Only used with get requests
         "json": [{ "si": "no" }],
-        "proxy": {"http": "http://miproxy"},
+        "proxy_cfg": {"http": "http://miproxy"},
         "headers": {"Content-Type": "application/pdf"}
         "client": <aiohttp.ClientSession>,
         "timeout": 15,
@@ -111,8 +112,8 @@ def multiple_async_requests(urloptions_list, common_options, loop=None):
         loop: Asyncio event loop
 
     Returns: A list of AsyncResponse named tuple, defined on top of this module
-    >>> urls = [('http://www.granma.cu', {}), ('https://actualidad.rt.com', {}), ('http://www.cubadebate.cu', {}),
-                ('https://www.filehorse.com/es', {})]
+    >>> urls = ['http://www.granma.cu', ('https://actualidad.rt.com', {'json': {'num': 2}}), 'http://www.cubadebate.cu',
+                ('https://www.filehorse.com/es', {'timeout': 12})]
     >>> response_list = multiple_async_requests(urls, {'method': 'get', 'timeout': '10'})
 
     """
@@ -126,18 +127,24 @@ def multiple_async_requests(urloptions_list, common_options, loop=None):
 
 
 async def execute_async(urloptions_list, common_options, loop=None):
-    if 'client' not in common_options:
-        common_options['client'] = create_client(loop)
-    # async with common_options['client'] as client:
+    # if 'client' not in common_options:
+    #     common_options['client'] = create_client(loop)
+    aiohttp_client = common_options.pop('client', create_client(loop))
     tasks = []
-    for url, opts in urloptions_list:
-        options = {**common_options, **opts}
-        tasks.append(async_request(url, **options))
-    return await asyncio.gather(*tasks, loop=loop)
+    async with aiohttp_client as client:
+        for url in urloptions_list:
+            # If url is not a string, must be an iterable with shape ("http://url.example.com", {**options})
+            if isinstance(url, (list, tuple)):
+                if len(url) != 2 or not isinstance(url[1], dict):
+                    raise AttributeError("At least one URL attribute has an incorrect format")
+                url, opts = url
+                common_options = {**common_options, **opts}
+            tasks.append(async_request(url, close_client_at_end=False, client=client, **common_options))
+        return await asyncio.gather(*tasks, loop=loop)
 
 
-async def async_request(url, method='get', data=None, params=None, json=None, proxy=None, *,
-                        headers=None, client=None, timeout=None, **kwargs):
+async def async_request(url, method='get', data=None, params=None, json=None, proxy_cfg=None, *,
+                        headers=None, client=None, timeout=None, close_client_at_end=True, **kwargs):
     client = client or create_client()
     if 'logger' in kwargs:
         logger = kwargs.pop('logger')
@@ -154,22 +161,24 @@ async def async_request(url, method='get', data=None, params=None, json=None, pr
 
     parsed = parse_url(url)
     if parsed.scheme not in ('http', 'https'):
-        raise ValueError(f"URL '{url}' is not valid")
+        raise ValueError(f"URL '{url}' has not a valid schema (must be http or https)")
 
-    if isinstance(proxy, dict):
-        single_proxy = proxy.get('http')
+    if isinstance(proxy_cfg, dict):
+        single_proxy = proxy_cfg.get('http')
     else:
-        single_proxy = proxy
+        single_proxy = proxy_cfg
 
     aiohttp_allowed = True
-    if (proxy is not None and not single_proxy) or parsed.scheme == 'https' or parse_url(
+    # If there is a proxy_cfg and it is https, or if the site to visit is https, do not use aiohttp
+    if (proxy_cfg is not None and not single_proxy) or parsed.scheme == 'https' or parse_url(
             single_proxy).scheme == 'https':
         aiohttp_allowed = False
 
     if aiohttp_allowed:
         try:
             text = await aiohttp_pure_request(url, method, data, params, json, single_proxy,
-                                              headers=headers, client=client, timeout=timeout, **kwargs)
+                                              headers=headers, client=client, timeout=timeout,
+                                              close_client_at_end=False, **kwargs)
             return text
         except TimeoutError as err:
             logger.warning(f"aiohttp => TimeOut => {url}: {str(err)}")
@@ -186,8 +195,10 @@ async def async_request(url, method='get', data=None, params=None, json=None, pr
     # Pushing logger back to kwargs if it was present before
     if had_logger:
         kwargs['logger'] = logger
-    text = await sync_to_async_request(url, method, data, params, json, proxy,
+    text = await sync_to_async_request(url, method, data, params, json, proxy_cfg,
                                        headers=headers, loop=loop, timeout=timeout, **kwargs)
+    if close_client_at_end:
+        await client.close()
     return text
 
 
@@ -209,7 +220,7 @@ async def add_async_callback(future_fn, future_fn_args, future_fn_kwargs, callba
 
 
 async def aiohttp_pure_request(url, method, data=None, params=None, json=None, proxy_cfg=None, *,
-                               headers=None, client=None, timeout=None, **kwargs):
+                               headers=None, client=None, timeout=None, close_client_at_end=True, **kwargs):
     """
     Execute an http request to a specified url
 
@@ -259,6 +270,8 @@ async def aiohttp_pure_request(url, method, data=None, params=None, json=None, p
             text = await resp.text(encoding=default_encoding, errors='replace')
         response_info = HTTPInfo(url=str(resp.url), status_code=resp.status, headers=dict(resp.headers),
                                  request_headers=dict(resp.request_info.headers))
+    if close_client_at_end:
+        await client.close()
     return AsyncResponse(type='aiohttp', http_response=response_info, text=text)
 
 
@@ -289,6 +302,8 @@ def sync_request(url, method, data=None, params=None, json=None, proxy_cfg=None,
             "http": proxy_cfg,
             "https": proxy_cfg
         }
+
+    headers = headers or {}
 
     client_kwargs = {
         'data': data,
