@@ -8,13 +8,11 @@ setup(
     description="HTTP sync / async python (>=3.6) library that works with requests and aiohttp libraries, exploiting the best of each one",
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/http-requests",
+    download_url="https://github.com/JoseVL92/http-requests/archive/v_01.tar.gz",
     packages=find_packages(),
-    package_data={
-        '': [
-            'LICENSE',
-            'README.md'
-        ],
-    },
+    data_files=[
+        ("", ["LICENSE.txt", "README.md"])
+    ],
     install_requires=['requests', 'aiohttp'],
     classifiers=[
         'Development Status :: 3 - Alpha',
