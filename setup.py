@@ -5,7 +5,7 @@ setup(
     version=1.0,
     author="Jose Alberto Varona Labrada",
     author_email="jovalab92@gmail.com",
-    description="HTTP sync / async python (>=3.6) library that works with both: requests and aiohttp, exploiting the best of each one",
+    description="HTTP sync / async python (>=3.6) library that works with requests and aiohttp libraries, exploiting the best of each one",
     python_requires=">=3.6",
     project_urls={
         "Source Code": "https://github.com/JoseVL92/http-requests"
