@@ -8,7 +8,7 @@ setup(
     description="HTTP sync / async python (>=3.6) library that works with requests and aiohttp libraries",
     python_requires=">=3.6",
     url="https://github.com/JoseVL92/web-requester",
-    download_url="https://github.com/JoseVL92/web-requester/archive/v0.1.tar.gz",
+    download_url="https://github.com/JoseVL92/web-requester/archive/refs/tags/v0.2.tar.gz",
     packages=find_packages(),
     data_files=[
         ("", ["LICENSE.txt", "README.md"])
