@@ -21,9 +21,9 @@ for every async request if aiohttp does not make the job.
 default_logger = logging.getLogger(__name__)
 default_encoding = 'UTF-8'
 
-# Some sites block bot by User-Agent information. To avoid that, we set a Mozilla v61.0 header
+# Some sites block bot by User-Agent information. To avoid that, we set a Chrome v101 header
 default_headers = {
-    "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:61.0) Gecko/20100101 Firefox/61.0"
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.4951.64 Safari/537.36"
 }
 default_tcp_connections_limit = 100
 default_tcp_connections_limit_per_host = 30
