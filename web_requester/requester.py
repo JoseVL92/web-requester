@@ -2,6 +2,7 @@ import aiohttp
 import asyncio
 import logging
 import requests
+import sys
 
 from aiohttp.client_exceptions import ClientConnectionError, ClientResponseError
 from collections import namedtuple
@@ -19,6 +20,21 @@ for every async request if aiohttp does not make the job.
 # ------------------------------------------- DEFAULTS AND AUXILIAR VARIABLES ------------------------------------------
 
 default_logger = logging.getLogger(__name__)
+default_logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s',
+                              '%m-%d-%Y %H:%M:%S')
+
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.DEBUG)
+stdout_handler.setFormatter(formatter)
+
+# file_handler = logging.FileHandler('logs.log')
+# file_handler.setLevel(logging.DEBUG)
+# file_handler.setFormatter(formatter)
+
+# logger.addHandler(file_handler)
+default_logger.addHandler(stdout_handler)
+
 default_encoding = 'UTF-8'
 
 # Some sites block bot by User-Agent information. To avoid that, we set a Chrome v101 header
