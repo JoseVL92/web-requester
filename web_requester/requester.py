@@ -184,7 +184,7 @@ async def request_all_async(urloptions_list, common_options, loop=None):
                 comm_opts.pop('aio_client', None)
                 comm_opts.pop('close_aio_at_end', None)
             tasks.append(async_request(url, aio_client=aux_aio_client, close_aio_at_end=False, **comm_opts))
-        return await asyncio.gather(*tasks, loop=loop)
+        return await asyncio.gather(*tasks, loop=loop, return_exceptions=True)
 
     tasks = []
     if common_options.get('allow_aio', True) and not callable(common_options.get('callback')):
