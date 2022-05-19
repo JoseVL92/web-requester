@@ -46,6 +46,8 @@ default_tcp_connections_limit_per_host = 30
 options_keys = ['method', 'data', 'params', 'json', 'proxy_cfg', 'headers',
                 'allow_aio', 'aio_client', 'timeout', 'logger', 'callback']
 
+allowed_http_methods = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options']
+
 
 def create_aioclient(timeout=None, connections_limit=None, connections_limit_per_host=None):
     session_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -193,11 +195,17 @@ async def async_request(url, method='get', data=None, params=None, json=None, pr
         logger = default_logger
         had_logger = False
 
-    if isinstance(timeout, str):
-        if timeout.isdigit():
-            timeout = int(timeout)
-        else:
-            timeout = None
+    if not isinstance(method, str) or not method.lower() in allowed_http_methods:
+        logger.error(f"HTTP method '{method}' not allowed")
+        return
+
+    method = method.lower()
+
+    try:
+        timeout = int(timeout)
+    except Exception:
+        logger.warning(f"'{timeout}' is not a valid timeout value.")
+        timeout = None
 
     parsed = parse_url(url)
     if parsed.scheme not in ('http', 'https'):
