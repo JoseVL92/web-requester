@@ -5,7 +5,6 @@ import requests
 import sys
 
 from aiohttp.client_exceptions import ClientConnectionError, ClientResponseError
-from collections import namedtuple
 from concurrent.futures import TimeoutError
 from urllib3.util import parse_url
 
@@ -25,7 +24,7 @@ formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s',
                               '%m-%d-%Y %H:%M:%S')
 
 stdout_handler = logging.StreamHandler(sys.stdout)
-stdout_handler.setLevel(logging.DEBUG)
+stdout_handler.setLevel(logging.INFO)
 stdout_handler.setFormatter(formatter)
 
 # file_handler = logging.FileHandler('logs.log')
@@ -44,40 +43,16 @@ default_headers = {
 default_tcp_connections_limit = 100
 default_tcp_connections_limit_per_host = 30
 
-# aux named tuple for using in default callback
-AsyncResponse = namedtuple('AsyncResponse', ['type', 'response'])
 
-
-# default http response information
-# HTTPInfo = namedtuple('HTTPInfo', ['url', 'status_code', 'response_headers', 'request_headers'])
-
-
-# in future Python versions, this will be an alias for asyncio.get_running_loop
-def get_valid_loop():
-    try:
-        # If there is no loop in current thread, it raises RuntimeError
-        loop_ = asyncio.get_event_loop()
-        # If current loop is "for any reason" closed, raise RuntimeError to create a new one
-        if loop_.is_closed():
-            raise RuntimeError
-    except RuntimeError:
-        loop_ = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop_)
-    return loop_
-
-
-def create_aioclient(loop=None, timeout=None, connections_limit=None, connections_limit_per_host=None):
-    loop = loop or get_valid_loop()
-
+def create_aioclient(timeout=None, connections_limit=None, connections_limit_per_host=None):
     session_timeout = aiohttp.ClientTimeout(total=timeout)
     conn = aiohttp.TCPConnector(
         limit=connections_limit or default_tcp_connections_limit,
-        limit_per_host=connections_limit_per_host or default_tcp_connections_limit_per_host,
-        loop=loop
+        limit_per_host=connections_limit_per_host or default_tcp_connections_limit_per_host
     )
     # Setting trust_env=True is for default behavior: if proxy parameter is not specified per request,
     # look at the environment variables and use them if they exist, or do not use proxy at all
-    return aiohttp.ClientSession(timeout=session_timeout, loop=loop, connector=conn, trust_env=True)
+    return aiohttp.ClientSession(timeout=session_timeout, connector=conn, trust_env=True)
 
 
 # default_client = create_aioclient()
@@ -109,7 +84,7 @@ class XResponseError(Exception):
 # ------------------------------------------- MAIN ENTRY POINT ---------------------------------------------------------
 
 
-def request_all(urloptions_list, common_options, loop=None):
+def request_all(urloptions_list, common_options):
     """
     Give the possibility of make several requests with common options for all, or specific options for each of them.
     aiohttp library will be used only for default behavior (text retrieving, no callback) and if not explicitly disabled
@@ -126,27 +101,21 @@ def request_all(urloptions_list, common_options, loop=None):
         "aio_client": <aiohttp.ClientSession>,  # this is the only option that must be global, not specific for a single url
         "timeout": 15,
         "logger": <logging.logger>,
-        "callback": <function that receives a web_requester.requester.AsyncResponse as argument>.
+        "callback": <function that receives a requests.Response as argument>.
                     If callback exists, the URL will be fetched using 'requests' only for standardization
     }
     Args:
         urloptions_list: tuple (url, opts), where 'url' is the url of the request, and opts is a dictionary with specific options
         common_options: dictionary with common options for every request, if that request does not specify its own options
-        loop: Asyncio event loop
 
-    Returns: A list of AsyncResponse named tuple, defined on top of this module
+    Returns: A list of responses defined by each specific callback or the general callback, or each response text by default
     >>> urls = ['https://google.com', ('https://actualidad.rt.com', {'json': {'num': 2}}), 'http://www.cubadebate.cu',
                 ('https://www.filehorse.com/es', {'timeout': 12})]
     >>> response_list = request_all(urls, {'method': 'get', 'timeout': '10'})
 
     """
-    if not loop:
-        # ask for forgiveness and not permission
-        try:
-            loop = common_options['aio_client'].loop
-        except:
-            loop = get_valid_loop()
-    response_list = loop.run_until_complete(request_all_async(urloptions_list, common_options, loop))
+    loop = asyncio.get_event_loop()
+    response_list = loop.run_until_complete(request_all_async(urloptions_list, common_options))
     return response_list
 
 
@@ -167,7 +136,7 @@ async def chain_callback(future_fn, future_fn_args, future_fn_kwargs, callback, 
     return await callback(resp, *callback_args, **callback_kwargs)
 
 
-async def request_all_async(urloptions_list, common_options, loop=None):
+async def request_all_async(urloptions_list, common_options):
     """
     Same that request_all, but to be used directly with 'async' directive
     """
@@ -184,18 +153,16 @@ async def request_all_async(urloptions_list, common_options, loop=None):
                 comm_opts.pop('aio_client', None)
                 comm_opts.pop('close_aio_at_end', None)
             tasks.append(async_request(url, aio_client=aux_aio_client, close_aio_at_end=False, **comm_opts))
-        return await asyncio.gather(*tasks, loop=loop)
+        return await asyncio.gather(*tasks, return_exceptions=True)
 
     tasks = []
     if common_options.get('allow_aio', True) and not callable(common_options.get('callback')):
-        # aio_client = common_options.setdefault('aio_client', create_aioclient(loop))
-        aio_client = common_options.pop('aio_client', create_aioclient(loop))
-        # aio_client = common_options.pop('aio_client', create_aioclient(loop))
+        aio_client = common_options.pop('aio_client', create_aioclient())
         async with aio_client as client:
             return await aux(client)
 
     logger = common_options.get('logger', default_logger)
-    logger.info("Using 'requests' library for every request")
+    logger.debug("Using 'requests' library for every request")
     return await aux()
 
 
@@ -242,22 +209,17 @@ async def async_request(url, method='get', data=None, params=None, json=None, pr
                                               headers=headers, client=aio_client, timeout=timeout,
                                               close_client_at_end=close_aio_at_end, **kwargs)
         except ClientConnectionError:
-            logger.warning("Retrying with 'requests' instead")
-
-    loop = get_valid_loop()
+            logger.info("Retrying with 'requests' instead")
 
     # Pushing logger back to kwargs if it was present before
     if had_logger:
         kwargs['logger'] = logger
     return await sync_to_async_request(url, method, data, params, json, proxy_cfg, headers=headers,
-                                       loop=loop, timeout=timeout, callback=callback, **kwargs)
-    # if close_client_at_end:
-    #     await client.close()
-    # return text
+                                       timeout=timeout, callback=callback, **kwargs)
 
 
 async def sync_to_async_request(url, method, data=None, params=None, json=None, proxy_cfg=None, *,
-                                headers=None, loop=None, timeout=None, callback=None, **kwargs):
+                                headers=None, timeout=None, callback=None, **kwargs):
     if proxy_cfg is not None and isinstance(proxy_cfg, str):
         proxy_cfg = {
             "http": proxy_cfg,
@@ -265,7 +227,7 @@ async def sync_to_async_request(url, method, data=None, params=None, json=None, 
         }
     elif not isinstance(proxy_cfg, dict):
         proxy_cfg = None
-    loop = loop or get_valid_loop()
+    loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, sync_request, url, method, data, params, json, proxy_cfg, headers,
                                       timeout, callback, kwargs)
 
