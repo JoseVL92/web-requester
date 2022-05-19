@@ -20,8 +20,8 @@ for every async request if aiohttp does not make the job.
 
 default_logger = logging.getLogger(__name__)
 default_logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s',
-                              '%m-%d-%Y %H:%M:%S')
+formatter = logging.Formatter('%(asctime)s | web-requester / %(levelname)s | %(message)s',
+                              '%Y-%m-%d %H:%M:%S')
 
 stdout_handler = logging.StreamHandler(sys.stdout)
 stdout_handler.setLevel(logging.INFO)
