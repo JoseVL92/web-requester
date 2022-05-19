@@ -43,6 +43,9 @@ default_headers = {
 default_tcp_connections_limit = 100
 default_tcp_connections_limit_per_host = 30
 
+options_keys = ['method', 'data', 'params', 'json', 'proxy_cfg', 'headers',
+                'allow_aio', 'aio_client', 'timeout', 'logger', 'callback']
+
 
 def create_aioclient(timeout=None, connections_limit=None, connections_limit_per_host=None):
     session_timeout = aiohttp.ClientTimeout(total=timeout)
@@ -84,7 +87,7 @@ class XResponseError(Exception):
 # ------------------------------------------- MAIN ENTRY POINT ---------------------------------------------------------
 
 
-def request_all(urloptions_list, common_options):
+def request_all(urloptions_list: list, common_options: dict = None):
     """
     Give the possibility of make several requests with common options for all, or specific options for each of them.
     aiohttp library will be used only for default behavior (text retrieving, no callback) and if not explicitly disabled
@@ -114,6 +117,12 @@ def request_all(urloptions_list, common_options):
     >>> response_list = request_all(urls, {'method': 'get', 'timeout': '10'})
 
     """
+
+    if not common_options:
+        common_options = {}
+    for k in list(common_options.keys()):
+        if k not in options_keys:
+            del common_options[k]
     loop = asyncio.get_event_loop()
     response_list = loop.run_until_complete(request_all_async(urloptions_list, common_options))
     return response_list
@@ -136,10 +145,16 @@ async def chain_callback(future_fn, future_fn_args, future_fn_kwargs, callback, 
     return await callback(resp, *callback_args, **callback_kwargs)
 
 
-async def request_all_async(urloptions_list, common_options):
+async def request_all_async(urloptions_list: list, common_options: dict = None):
     """
     Same that request_all, but to be used directly with 'async' directive
     """
+
+    if not common_options:
+        common_options = {}
+    for k in list(common_options.keys()):
+        if k not in options_keys:
+            del common_options[k]
 
     async def aux(aux_aio_client=None):
         for url in urloptions_list:
